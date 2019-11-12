@@ -1,3 +1,10 @@
+#include <sys/ipc.h> 
+#include <sys/shm.h> 
+#include <stdio.h>
+#include <stdlib.h>
+
+#define SHR_MEM_FILE "./shrmem"
+
 int pubsub_init(void);
 int pubsub_create_topic(int topic_id);
 int pubsub_join(int topic_id);
