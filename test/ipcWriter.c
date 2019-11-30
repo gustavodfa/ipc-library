@@ -1,7 +1,7 @@
 #include <sys/ipc.h> 
 #include <sys/shm.h> 
 #include <stdio.h>
-#include "./ipcLib.c"
+#include "../src/msgq.c"
 int main() 
 { 
     int topicId;
@@ -11,9 +11,9 @@ int main()
     int data;
     printf("Write Data : "); 
     scanf("%d", &data);
-
-    int written = write(topicId, data);
-    printf("Data written in memory: %d\n", written);
+    pubsub_init();
+    int result = pubsub_publish(topicId, data);
+    printf("Data written in memory: %d\n", result);
   
     return 0; 
 } 
