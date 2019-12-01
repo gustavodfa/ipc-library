@@ -117,6 +117,20 @@ int join(Shmem *shm, int membership_status) {
   return 0;
 }
 
+// cancelSubs cancels subscription for the current process.
+int cancelSubs(Shmem *shm) {
+  int member_status = get_mship_status(shm);
+  if (member_status == NOT_A_MEMBER) {
+    fprintf(stderr, "error: process is not a member. Can't cancel subscription.\n");
+    return NOT_A_MEMBER;
+  }
+  Member *m = get_member(shm);
+  m->pid = -1;
+  m->membership_status = -1;
+  m->last_read = -1;
+  return 0;
+}
+
 // Gets first unread message if available,
 // returns NOT_A_MEMBER if the process is not a reader and
 // NO_NEW_MESSAGES if inbox is fully read by the process.

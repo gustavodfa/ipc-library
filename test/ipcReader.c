@@ -19,15 +19,18 @@ int main()
         printf("1 - Read. 2 - Quit.");
         scanf("%d", &option);
         if (option == 2) {
-            return 0;
+            break;
         }
-
         int value = pubsub_read(topicId);
         if (value == -1) {
             printf("no data to be read.\n");
         } else {
             printf("Data read from memory: %d\n", value);
         }
+    }
+    int cancel = pubsub_cancel(topicId);
+    if (cancel < 0) {
+        printf("fail\n");
     }
     return 0;
 } 

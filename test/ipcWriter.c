@@ -20,7 +20,7 @@ int main()
         printf("1 - Read. 2 - Quit.");
         scanf("%d", &option);
         if (option == 2) {
-            return 0;
+            break;
         }
         
         int data;
@@ -33,7 +33,9 @@ int main()
             printf("Data written in memory: %d\n", result);
         }
     }
-    
-  
+    int cancel = pubsub_cancel(topicId);
+    if (cancel < 0) {
+        printf("fail\n");
+    }
     return 0; 
 } 

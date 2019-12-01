@@ -104,8 +104,14 @@ int pubsub_subscribe(int topic_id) {
 }
 
 int pubsub_cancel(int topic_id) {
-  // TODO: Function needs to be implemented
-  return -1;
+  Shmem *shm;
+  int status = attachTopicId(topic_id, IPC_EXCL, &shm);
+  if (status == -1){
+    return -1;
+  }
+  status = cancelSubs(shm);
+  shmdt(shm);
+  return status;
 }
 
 // pubsub_publish will write to a topic id and return -1 if action couldn't be performed.
