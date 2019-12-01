@@ -1,3 +1,7 @@
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #define SHR_MEM_FILE "/tmp/shrmem"
 
 typedef struct Shmem {
@@ -5,6 +9,8 @@ typedef struct Shmem {
     int lastMessage;
     int queue[100];
 } Shmem;
+
+
 
 int full(Shmem *shm) {
   if (shm->lastMessage >= shm->size) {

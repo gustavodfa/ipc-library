@@ -10,6 +10,11 @@ int main()
     printf("What buf size you want to have: ");
     scanf("%d", &bufSize);
     pubsub_init();
-    pubsub_create_topic(topicId, bufSize);
+    int status = pubsub_create_topic(topicId, bufSize);
+    if (status == -1) {
+        printf("Couldn't initiate topic. :(\n");
+        return 1;
+    }
+    printf("Topic %d was successfully initiated.\n", topicId);
     return 0;
 } 
