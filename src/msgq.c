@@ -66,7 +66,7 @@ int pubsub_create_topic(int topic_id, int bufSize) {
   init.last_message = -1;
   init.size = bufSize;
   memset(init.queue, 0, sizeof(init.queue));
-  init.last_member = -1;
+  init.num_members = -1;
   for (int i = 0; i < SHR_MEM_MAX_MEMBERS; i++) {
     init.members[i].membership_status = -1;
   }

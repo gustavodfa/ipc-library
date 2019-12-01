@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <sys/types.h>
+#include <signal.h>
 #include <unistd.h>
 
 #define SHR_MEM_FILE "/tmp/shrmem"
@@ -20,7 +21,7 @@ typedef struct Member {
 typedef struct Shmem {
     int size;
     int last_message;
-    int last_member;
+    int num_members;
     int queue[SHR_MEM_MAX_MESSAGES];
     Member members[SHR_MEM_MAX_MEMBERS];
 } Shmem;
@@ -30,6 +31,20 @@ void printQueue(Shmem *shm) {
     printf("%d ", shm->queue[i]);
   }
   printf("\n");
+}
+
+void sanitize_members(Shmem *shm) {
+  for (int i = 0; i < SHR_MEM_MAX_MEMBERS; i++) {
+    Member *m = &shm->members[i];
+    if (m->membership_status != NOT_A_MEMBER) {
+      if (kill(m->pid, 0) != 0) { // Proccess does not exist. Carefull, pid may have been reused.
+        m->last_read=-1;
+        m->membership_status = -1;
+        m->pid = -1;
+        shm->num_members--;
+      }
+    }
+  }
 }
 
 //[1,2,3,4,5,6]
@@ -46,6 +61,7 @@ void lshift(Shmem *shm, int amount) {
 // read by all of its members. Returns 0 if
 // successful and -1 otherwise.
 int sanitize_queue(Shmem *shm) {
+  sanitize_members(shm);
   int last_read = SHR_MEM_MAX_MESSAGES + 1;
   for (int i = 0; i < SHR_MEM_MAX_MEMBERS; i++) {
     if (shm->members[i].membership_status == WR_MEMBER && shm->members[i].last_read < last_read) {
@@ -96,23 +112,26 @@ int get_mship_status(Shmem *shm) {
 }
 
 
-// join creates a new member or turns existing one to a reader.
+// join creates a new member or changes membership_status for existing one.
 int join(Shmem *shm, int membership_status) {
   int status = get_mship_status(shm);
   if (status != -1) {
     Member* m = get_member(shm);
     m->membership_status = membership_status;
   } else {
-    Member new;
-    new.pid = getpid();
-    new.last_read = -1;
-    new.membership_status = membership_status;
-
-    if (shm->last_member >= SHR_MEM_MAX_MEMBERS){
+    if (shm->num_members >= SHR_MEM_MAX_MEMBERS){
       return -1;
     }
-    shm->last_member++;
-    shm->members[shm->last_member] = new;
+    for (int i = 0; i < SHR_MEM_MAX_MEMBERS; i++) {
+      if (shm->members[i].membership_status == -1) {
+        shm->members[i].pid = getpid();
+        shm->members[i].membership_status = membership_status;
+        shm->members[i].last_read = shm->last_message; // New member won't access messages that were already in the buffer.
+        shm->num_members ++;
+        return 0;
+      }  
+    }
+    return -1;
   }
   return 0;
 }
