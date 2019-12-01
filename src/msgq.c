@@ -67,6 +67,9 @@ int pubsub_create_topic(int topic_id, int bufSize) {
   init.size = bufSize;
   memset(init.queue, 0, sizeof(init.queue));
   init.last_member = -1;
+  for (int i = 0; i < SHR_MEM_MAX_MEMBERS; i++) {
+    init.members[i].membership_status = -1;
+  }
 
   Shmem *shm;
   int status = attachTopicId(topic_id, IPC_CREAT|IPC_EXCL, &shm);
@@ -115,8 +118,8 @@ int pubsub_publish(int topic_id, int msg) {
   }
   status = add_message(shm, msg); //Write
   shmdt(shm);  // Detach from memory
-  if (status == -1){
-    return status;
+  if (status < -1){
+    return -1;
   }
   return msg;
 }
@@ -127,12 +130,12 @@ int pubsub_read(int topic_id) {
   int msg, status;
   Shmem *shm;
   status = attachTopicId(topic_id, 0, &shm);
-  if (status == -1){
+  if (status < 0){
     return -1;
   }
   status = get_message(shm, &msg);
   shmdt(shm);  // Detach from memory
-  if (status == -1){
+  if (status < 0){
     return -1;
   }
   return msg;

@@ -4,6 +4,7 @@
 #include "../src/msgq.c"
 int main() 
 { 
+    printf("Writer: %d\n", getpid());
     int topicId;
     printf("What topic id you want to write for : "); 
     scanf("%d", &topicId);
@@ -13,11 +14,26 @@ int main()
         printf("didn't join\n");
         return -1;
     }
-    int data;
-    printf("Write Data : "); 
-    scanf("%d", &data);
-    int result = pubsub_publish(topicId, data);
-    printf("Data written in memory: %d\n", result);
+
+    while (1) {
+        int option;
+        printf("1 - Read. 2 - Quit.");
+        scanf("%d", &option);
+        if (option == 2) {
+            return 0;
+        }
+        
+        int data;
+        printf("Write Data : "); 
+        scanf("%d", &data);
+        int result = pubsub_publish(topicId, data);
+        if (result == -1) {
+            printf("error trying to write, try again.\n");
+        } else {
+            printf("Data written in memory: %d\n", result);
+        }
+    }
+    
   
     return 0; 
 } 

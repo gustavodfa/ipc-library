@@ -8,8 +8,8 @@
 #define WR_MEMBER 1
 #define WONLY_MEMBER 0
 #define NOT_A_MEMBER -1
-#define NO_NEW_MESSAGES 1
-#define BUFFER_IS_FULL 2
+#define NO_NEW_MESSAGES -2
+#define BUFFER_IS_FULL -3
 
 typedef struct Member {
   pid_t pid;
@@ -25,10 +25,17 @@ typedef struct Shmem {
     Member members[SHR_MEM_MAX_MEMBERS];
 } Shmem;
 
+void printQueue(Shmem *shm) {
+  for (int i = 0; i < shm->size; i++) {
+    printf("%d ", shm->queue[i]);
+  }
+  printf("\n");
+}
+
 //[1,2,3,4,5,6]
 // Shifts an array to the left by an given amount.
 void lshift(Shmem *shm, int amount) {
-  for (int i = amount; i < SHR_MEM_MAX_MESSAGES; i++) {
+  for (int i = amount; i < shm->size; i++) {
     shm->queue[i - amount] = shm->queue[i];
     shm->queue[i] = -1;
   }
@@ -39,22 +46,27 @@ void lshift(Shmem *shm, int amount) {
 // read by all of its members. Returns 0 if
 // successful and -1 otherwise.
 int sanitize_queue(Shmem *shm) {
-  int last_read_message = SHR_MEM_MAX_MESSAGES;
-
+  int last_read = SHR_MEM_MAX_MESSAGES + 1;
+  for (int i = 0; i < SHR_MEM_MAX_MEMBERS; i++) {
+    if (shm->members[i].membership_status == WR_MEMBER && shm->members[i].last_read < last_read) {
+      last_read = shm->members[i].last_read;
+    }
+  }
+  if (last_read == -1 || last_read == SHR_MEM_MAX_MESSAGES + 1)
+    return -1;
+  lshift(shm, last_read + 1);
+  // Subtract last read for every member.
   for (int i = 0; i < SHR_MEM_MAX_MEMBERS; i++) {
     Member *m = &shm->members[i];
-    if (m->membership_status == WR_MEMBER && m->last_read < SHR_MEM_MAX_MESSAGES)
-      last_read_message = m->last_read;
+    if (m->membership_status == WR_MEMBER)
+      m->last_read -= last_read + 1;
   }
-  if (last_read_message == -1)
-    return -1;
-  lshift(shm, last_read_message + 1);
   return 0;
 }
 
 // Full full returns 1 if the buffer is full or 0 if not.
 int full(Shmem *shm) {
-  if (shm->last_message >= shm->size) {
+  if (shm->last_message+1 >= shm->size) {
     return BUFFER_IS_FULL;
   }
   return 0;
@@ -63,7 +75,7 @@ int full(Shmem *shm) {
 // Returns the current proccess membership.
 Member* get_member(Shmem *shm) {
   pid_t pid = getpid();
-  for (int i = 0; i < shm->last_member; i++) {
+  for (int i = 0; i < SHR_MEM_MAX_MEMBERS; i++) {
     if (pid == shm->members[i].pid) {
       return &shm->members[i];
     }
@@ -75,7 +87,7 @@ Member* get_member(Shmem *shm) {
 int get_mship_status(Shmem *shm) {
   pid_t pid = getpid();
 
-  for (int i = 0; i <= shm->last_member; i++) {
+  for (int i = 0; i <= SHR_MEM_MAX_MEMBERS; i++) {
     if (pid == shm->members[i].pid) {
       return shm->members[i].membership_status;
     }
@@ -109,14 +121,13 @@ int join(Shmem *shm, int membership_status) {
 // returns NOT_A_MEMBER if the process is not a reader and
 // NO_NEW_MESSAGES if inbox is fully read by the process.
 int get_message(Shmem *shm, int *msg) {
-  Member *m = get_member(shm);
-  int member_status = m->membership_status;
-
+  int member_status = get_mship_status(shm);
   if (member_status != WR_MEMBER) {
     fprintf(stderr, "error: process hasn't permissions to access inbox\n");
     return NOT_A_MEMBER;
   }
-  if (m->last_read + 1 >= SHR_MEM_MAX_MESSAGES) {
+  Member *m = get_member(shm);
+  if (m->last_read + 1 > shm->last_message) {
     fprintf(stderr, "error: there are no new messages\n");
     return NO_NEW_MESSAGES;
   }
