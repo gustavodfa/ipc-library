@@ -121,7 +121,8 @@ int pubsub_publish(int topic_id, int msg) {
   return msg;
 }
 
-// pubsub_read will read last message from topic id and return -1 if no message is found.
+// pubsub_read will read first unread message from topic id
+// and return -1 if no message is found.
 int pubsub_read(int topic_id) {
   int msg, status;
   Shmem *shm;
