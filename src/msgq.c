@@ -21,7 +21,7 @@ key_t generateKey(int topicId) {
 
 int segmentId(key_t key, int options) {
   int shmid;
-  shmid = shmget(key, sizeof(Shmem), IPC_CREAT|0777|options);
+  shmid = shmget(key, sizeof(Shmem), 0777 | options);
   if (shmid == -1) {
     perror("shmget");
     return -1;
@@ -48,7 +48,8 @@ int attachTopicId(int topic_id, int options,Shmem **shm){
   if (shmid == -1) {
     return -1;
   }
-  return attach(shmid, shm); // Attach to memory
+  int status = attach(shmid, shm); // Attach to memory
+  return status;
 }
 
 // Creates the shrmem file to allow key generation.
@@ -62,12 +63,13 @@ int pubsub_init(void) {
 // pubsub_create_topic initiates a topic with topic_id and bufSize.
 int pubsub_create_topic(int topic_id, int bufSize) {
   Shmem init;
-  init.lastMessage = -1;
+  init.last_message = -1;
   init.size = bufSize;
   memset(init.queue, 0, sizeof(init.queue));
+  init.last_member = -1;
 
   Shmem *shm;
-  int status = attachTopicId(topic_id, IPC_EXCL, &shm);
+  int status = attachTopicId(topic_id, IPC_CREAT|IPC_EXCL, &shm);
   if (status == -1){
     return -1;
   }
@@ -77,13 +79,25 @@ int pubsub_create_topic(int topic_id, int bufSize) {
 }
 
 int pubsub_join(int topic_id) {
-  // TODO: Function needs to be implemented
-  return -1;
+  Shmem *shm;
+  int status = attachTopicId(topic_id, IPC_EXCL, &shm);
+  if (status == -1){
+    return -1;
+  }
+  status = join(shm, 0);
+  shmdt(shm);
+  return status;
 }
 
 int pubsub_subscribe(int topic_id) {
-  // TODO: Function needs to be implemented
-  return -1;
+  Shmem *shm;
+  int status = attachTopicId(topic_id, IPC_EXCL, &shm);
+  if (status == -1){
+    return -1;
+  }
+  status = join(shm, 1);
+  shmdt(shm);
+  return status;
 }
 
 int pubsub_cancel(int topic_id) {
