@@ -17,7 +17,7 @@ int main()
 
     while (1) {
         int option;
-        printf("1 - Read. 2 - Quit.");
+        printf("1 - Write. 2 - Quit.");
         scanf("%d", &option);
         if (option == 2) {
             break;

@@ -2,7 +2,7 @@
 #include "unistd.h"
 #include "string.h"
 #include "pthread.h"
-#include "../src/msgq.h"
+#include "../src/msgq.c"
 
 #define OPTION 1
 #define TOPIC_ID 2
