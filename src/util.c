@@ -23,18 +23,18 @@
 // SHARED MEM STRUCTS
 typedef struct Member {
   pid_t pid;
-  int last_read;
-  int membership_status; // change attribute name to membership_status
-  int sem_num;
+  int last_read; // last message a member has read.
+  int membership_status; // membership_status (WR, W, NOT_MEMBER)
 } Member;
 
 typedef struct Shmem {
-    int size;
-    int last_message;
-    int last_writer_increment;
-    int num_members;
-    int queue[SHR_MEM_MAX_MESSAGES];
-    Member members[SHR_MEM_MAX_MEMBERS];
+    int size; // Shared memory size, max == SHR_MEM_MAX_MESSAGES
+    int last_message; // last written message index.
+    int num_readers_waiting; // number of readers waiting in the readers sem
+    int num_writers_waiting; // number of writers waiting in the writers sem
+    int num_members; // num of members of the shmem
+    int queue[SHR_MEM_MAX_MESSAGES]; // message queue
+    Member members[SHR_MEM_MAX_MEMBERS]; // members array
 } Shmem;
 
 // KEY GENERATION
@@ -48,6 +48,8 @@ key_t generateKey(int topicId) {
 }
 
 // SHARED MEMORY
+
+// segmentId will generate the shared memory segment id for key and options.
 int segmentId(key_t key, int options) {
   int shmid;
   shmid = shmget(key, sizeof(Shmem), 0777 | options);
@@ -58,6 +60,7 @@ int segmentId(key_t key, int options) {
   return shmid;
 }
 
+// attach calls shmat and attachs shared memory to pointer dst.
 int attach(int shmid, Shmem **dst){
   void *shm = shmat(shmid, (void*)0, 0); // Attach to memory
   if (shm == (void *)(-1)) {
@@ -68,6 +71,9 @@ int attach(int shmid, Shmem **dst){
   return 0;
 }
 
+// attachTopicId 
+// takes a topic id, options and *shm pointer
+// will try to attach to the shared memory identified by the topic_id
 int attachTopicId(int topic_id, int options,Shmem **shm){
   key_t key = generateKey(topic_id); // Get key for the topic.
   if (key == -1) {
@@ -83,8 +89,9 @@ int attachTopicId(int topic_id, int options,Shmem **shm){
 
 // SEMAPHORES
 
+// sempahoreId returns the semaphore id for key and options.
 int semaphoreId(key_t key, int options) {
-  int semid = semget(key, 2 + SHR_MEM_MAX_MEMBERS, options | 0777);
+  int semid = semget(key, 3, options | 0777);
   if (semid == -1) {
     perror("semget");
     return -1;
@@ -92,46 +99,7 @@ int semaphoreId(key_t key, int options) {
   return semid;
 }
 
-int resetReaderSem(int tid, int sem_num, int init_num) {
-  key_t key = generateKey(tid);
-  if (key == -1) {
-    return -1;
-  }
-  int semid = semaphoreId(key, 0666);
-  if (semid == -1) {
-    return -1;
-  }
-  union semun {
-    int val;
-    struct semid_ds *buf;
-    unsigned short int array[1];
-  } arg_ctl ;
-
-  arg_ctl.val = init_num;
-  if (semctl(semid, sem_num, SETVAL, arg_ctl) == -1) {
-    perror("Erro inicializacao semaforo") ;
-  return -1;
-  }
-  return 0;
-}
-
-int getSemValue(int sem_num, int tid) {
-  key_t key = generateKey(tid);
-  if (key == -1) {
-    return -1;
-  }
-  int semid = semaphoreId(key, 0666);
-  if (semid == -1) {
-    return -1;
-  }
-  union semun {
-    int val;
-    struct semid_ds *buf;
-    unsigned short int array[1];
-  } arg_ctl ;
-  return semctl(semid, sem_num, GETVAL, arg_ctl);
-}
-
+// semaphoreInit will initialize three semaphores, one acting as a mutex and other two as a cond var.
 int semaphoreInit(int semid, int bufSize) {
   union semun {
     int val;
@@ -147,7 +115,14 @@ int semaphoreInit(int semid, int bufSize) {
   }
 
   // Writer.
-  arg_ctl.val = bufSize;
+  arg_ctl.val = 0;
+  if (semctl(semid,1,SETVAL,arg_ctl) == -1) {
+    perror("Erro inicializacao semaforo") ;
+    return -1;
+  }
+
+  // Reader.
+  arg_ctl.val = 0;
   if (semctl(semid,1,SETVAL,arg_ctl) == -1) {
     perror("Erro inicializacao semaforo") ;
     return -1;
@@ -155,6 +130,7 @@ int semaphoreInit(int semid, int bufSize) {
   return 0;
 }
 
+// generateSems is the init function for semaphore generation.
 int generateSems(int topicId, int bufSize) {
   key_t key = generateKey(topicId);
   if (key == -1) {
@@ -167,6 +143,7 @@ int generateSems(int topicId, int bufSize) {
   return semaphoreInit(semid, bufSize);
 }
 
+// Acquire will try to acquire semaphore with sem_num.
 int acquire(int topicId, int sem_num) {
   key_t key = generateKey(topicId);
   if (key == -1) {
@@ -179,14 +156,15 @@ int acquire(int topicId, int sem_num) {
   struct sembuf sempar[1];
   sempar[0].sem_num = sem_num;
   sempar[0].sem_op = -1;
-  sempar[0].sem_flg = (sem_num == SEM_MUTEX) ? SEM_UNDO : 0;
+  sempar[0].sem_flg = SEM_UNDO;
   if (semop(semid, sempar, 1) == -1){
-    perror("Erro operacao P");
+    perror("Erro operacao acquire");
     return -1;
   }
   return 0;
 }
 
+// release will try to release semaphore for release_value.
 int release(int topicId, int sem_num, int release_value)
 {
   key_t key = generateKey(topicId);
@@ -202,7 +180,7 @@ int release(int topicId, int sem_num, int release_value)
   sempar[0].sem_op =  release_value;
   sempar[0].sem_flg = SEM_UNDO;
   if (semop(semid, sempar, 1) == -1) {
-    perror("Erro operacao V");
+    perror("Erro operacao release");
     return -1;
   }
   return 0;

@@ -27,8 +27,7 @@ void *read_topic(void *arg) {
 
   for (;;) {
     value = pubsub_read(topic_id);
-    if (value != -1)
-      printf("got: %d\n", value);
+    printf("got: %d\n", value);
   }
 }
 
@@ -59,7 +58,7 @@ void join_topic(int topic_id) {
 
 void create_topic(int topic_id) {
   if (pubsub_create_topic(topic_id, BUFFER_SIZE) == -1) {
-    fprintf(stderr, "error: couldn't create topic!");
+    fprintf(stderr, "error: couldn't create topic!\n");
     exit(1);
   }
   join_topic(topic_id);
